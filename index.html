@@ -1,9 +1,195 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="zh-Hant">
 <head>
-    <title>Be Gentle Men</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BeGentle.men</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #080b13; color: #eaf0ff; font-family: system-ui, "Segoe UI", sans-serif; }
+  #scene { display:block; width:100%; height:100%; }
+  .panel {
+    position: fixed; left: 20px; top: 20px; z-index: 2; max-width: min(360px, calc(100vw - 40px));
+    padding: 16px 18px; border: 1px solid #ffffff24; border-radius: 16px;
+    background: #111827bd; backdrop-filter: blur(12px); box-shadow: 0 12px 36px #0005;
+  }
+  h1 { margin: 0 0 7px; font-size: 19px; letter-spacing: .03em; }
+  p { margin: 0; color: #b9c4d8; font-size: 13px; line-height: 1.55; }
+  .hint { margin-top: 10px; font-size: 12px; color: #91a4c5; }
+  .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  button { cursor:pointer; color:#eaf0ff; background:#263653; border:1px solid #52678c; padding:8px 11px; border-radius:9px; font-size:12px; }
+  button:hover { background:#354b70; }
+  #loading { position:fixed; inset:0; display:grid; place-items:center; color:#dbeafe; background:#080b13; z-index:5; }
+</style>
 </head>
 <body>
-    <h1>Hello World</h1>
+<div id="loading">正在載入 3D 場景…</div>
+<div class="panel">
+  <h1>3D 人頭展示</h1>
+  <p>拖曳滑鼠旋轉視角，滾輪縮放，右鍵拖曳平移。這是一個由 3D 幾何模型組成的示範頭像。</p>
+  <div class="actions">
+    <button id="reset">重設視角</button>
+    <button id="spin">開始自動旋轉</button>
+    <button id="wire">切換線框</button>
+  </div>
+  <div class="hint">需要網路連線以載入 Three.js。</div>
+</div>
+<canvas id="scene"></canvas>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas = document.querySelector('#scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#080b13');
+scene.fog = new THREE.Fog('#080b13', 8, 18);
+
+const camera = new THREE.PerspectiveCamera(34, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 0.2, 7.5);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 0.05, 0);
+controls.minDistance = 4.3;
+controls.maxDistance = 11;
+controls.maxPolarAngle = Math.PI * 0.86;
+
+scene.add(new THREE.HemisphereLight(0xbdd7ff, 0x271a22, 2.0));
+const key = new THREE.DirectionalLight(0xffe0c2, 3.0);
+key.position.set(3.5, 5, 5); key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024); scene.add(key);
+const fill = new THREE.PointLight(0x548cff, 32, 12);
+fill.position.set(-4, 1.5, 2); scene.add(fill);
+const rim = new THREE.PointLight(0xff4d9b, 25, 10);
+rim.position.set(1.5, 3, -3); scene.add(rim);
+
+const skin = new THREE.MeshStandardMaterial({ color: '#d9a17e', roughness: 0.72, metalness: 0.02 });
+const skinLight = new THREE.MeshStandardMaterial({ color: '#e7b28e', roughness: 0.65 });
+const shadowSkin = new THREE.MeshStandardMaterial({ color: '#a96e59', roughness: 0.82 });
+const hair = new THREE.MeshStandardMaterial({ color: '#171b29', roughness: 0.48 });
+const eyeWhite = new THREE.MeshStandardMaterial({ color: '#f5f0e9', roughness: 0.28 });
+const irisMat = new THREE.MeshStandardMaterial({ color: '#4b8eaa', roughness: 0.25, metalness: 0.12 });
+const pupilMat = new THREE.MeshStandardMaterial({ color: '#10131a', roughness: 0.2 });
+const lipMat = new THREE.MeshStandardMaterial({ color: '#7d3d42', roughness: 0.62 });
+const dark = new THREE.MeshStandardMaterial({ color: '#21151b', roughness: 0.9 });
+
+const head = new THREE.Group();
+scene.add(head);
+
+function ellipsoid(parent, material, pos, scale, seg=40) {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.max(24, Math.floor(seg*0.75))), material);
+  mesh.position.set(...pos); mesh.scale.set(...scale);
+  mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh;
+}
+
+// Main skull and jaw
+ellipsoid(head, skin, [0, 0.25, 0], [1.05, 1.38, 0.83], 64);
+ellipsoid(head, skin, [0, -0.55, 0.16], [0.78, 0.72, 0.72], 48);
+ellipsoid(head, skinLight, [0, -0.82, 0.38], [0.48, 0.27, 0.43], 40);
+// Neck
+ellipsoid(head, skin, [0, -1.48, -0.03], [0.48, 0.66, 0.47], 40);
+
+// Ears, with inner ear shadows
+for (const side of [-1, 1]) {
+  ellipsoid(head, skin, [side*1.02, -0.05, -0.01], [0.22, 0.39, 0.18], 32);
+  ellipsoid(head, shadowSkin, [side*1.105, -0.04, 0.125], [0.105, 0.25, 0.055], 28);
+  ellipsoid(head, skinLight, [side*1.08, -0.02, 0.17], [0.045, 0.13, 0.025], 24);
+}
+
+// Nose bridge and tip
+ellipsoid(head, skinLight, [0, -0.06, 0.77], [0.16, 0.43, 0.22], 36);
+ellipsoid(head, skin, [0, -0.32, 0.91], [0.22, 0.17, 0.22], 36);
+for (const side of [-1, 1]) {
+  ellipsoid(head, shadowSkin, [side*0.13, -0.39, 0.91], [0.065, 0.045, 0.055], 24);
+}
+
+// Eyes, eyelids, brows, irises and pupils
+for (const side of [-1, 1]) {
+  const x = side * 0.39;
+  ellipsoid(head, shadowSkin, [x, 0.25, 0.685], [0.285, 0.19, 0.105], 36);
+  ellipsoid(head, eyeWhite, [x, 0.245, 0.744], [0.235, 0.125, 0.075], 36);
+  ellipsoid(head, irisMat, [x + side*0.018, 0.24, 0.807], [0.082, 0.088, 0.035], 32);
+  ellipsoid(head, pupilMat, [x + side*0.018, 0.24, 0.836], [0.039, 0.05, 0.018], 28);
+  ellipsoid(head, eyeWhite, [x + side*0.035, 0.27, 0.852], [0.017, 0.019, 0.009], 16);
+  const brow = ellipsoid(head, hair, [x, 0.48, 0.72], [0.27, 0.065, 0.085], 32);
+  brow.rotation.z = side * -0.08;
+}
+
+// Mouth: upper and lower lip forms
+ellipsoid(head, dark, [0, -0.61, 0.79], [0.28, 0.075, 0.075], 32);
+ellipsoid(head, lipMat, [0, -0.585, 0.82], [0.255, 0.045, 0.06], 32);
+ellipsoid(head, skinLight, [0, -0.69, 0.79], [0.22, 0.055, 0.055], 32);
+
+// Hair cap and swept fringe
+const cap = ellipsoid(head, hair, [0, 1.05, -0.02], [1.04, 0.69, 0.85], 64);
+cap.rotation.x = -0.08;
+const fringe = ellipsoid(head, hair, [-0.25, 0.82, 0.61], [0.63, 0.24, 0.28], 48);
+fringe.rotation.z = -0.28;
+ellipsoid(head, hair, [0.48, 0.91, 0.53], [0.48, 0.18, 0.24], 40).rotation.z = 0.2;
+
+// Subtle display plinth
+const plinthMat = new THREE.MeshStandardMaterial({ color: '#182238', metalness: 0.55, roughness: 0.35 });
+const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.9, 0.18, 64), plinthMat);
+plinth.position.y = -2.13; plinth.castShadow = true; plinth.receiveShadow = true; scene.add(plinth);
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.018, 12, 96), new THREE.MeshStandardMaterial({ color:'#64c8ff', emissive:'#1b6eaa', emissiveIntensity:1.2, metalness:0.6, roughness:0.25 }));
+ring.rotation.x = Math.PI/2; ring.position.y = -2.035; scene.add(ring);
+
+// Floor
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color:'#080b13', roughness:0.92 }));
+floor.rotation.x = -Math.PI/2; floor.position.y = -2.24; floor.receiveShadow = true; scene.add(floor);
+
+// Decorative points in the background
+const starGeo = new THREE.BufferGeometry();
+const starPositions = [];
+for (let i=0; i<280; i++) {
+  starPositions.push((Math.random()-0.5)*18, (Math.random()-0.5)*11, -3-Math.random()*8);
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color:'#8dbdff', size:0.018, transparent:true, opacity:0.72 }));
+scene.add(stars);
+
+let autoSpin = false, wireframe = false;
+document.querySelector('#reset').addEventListener('click', () => {
+  camera.position.set(0, 0.2, 7.5); controls.target.set(0, 0.05, 0); controls.update();
+});
+document.querySelector('#spin').addEventListener('click', (e) => {
+  autoSpin = !autoSpin; e.currentTarget.textContent = autoSpin ? '停止自動旋轉' : '開始自動旋轉';
+});
+document.querySelector('#wire').addEventListener('click', (e) => {
+  wireframe = !wireframe;
+  head.traverse(obj => { if (obj.isMesh && obj.material && 'wireframe' in obj.material) obj.material.wireframe = wireframe; });
+  e.currentTarget.textContent = wireframe ? '關閉線框' : '切換線框';
+});
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+document.querySelector('#loading').style.display = 'none';
+
+renderer.setAnimationLoop(() => {
+  if (autoSpin) head.rotation.y += 0.004;
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
 </body>
 </html>
